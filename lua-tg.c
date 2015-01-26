@@ -21,7 +21,7 @@
 #include "config.h"
 #endif
 
-#ifdef USE_LUA
+///#ifdef USE_LUA
 #include "lua-tg.h"
 
 #include <string.h>
@@ -43,6 +43,8 @@ lua_State *luaState;
 //#include "auto/constants.h"
 #include <tgl/tgl.h>
 #include "interface.h"
+#include "tgl/tgl-layout.h"
+#include "tgl/tgl.h"
 
 #include <assert.h>
 extern int verbosity;
@@ -1486,4 +1488,4 @@ void lua_init (const char *file) {
   }
 }
 
-#endif
+//#endif
