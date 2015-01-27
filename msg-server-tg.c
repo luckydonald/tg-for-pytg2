@@ -93,9 +93,9 @@ void lua_new_msg (struct tgl_message *M) {
 	//socket_answer_start ();
 	printf("Sending Message...\n");
 	socket_answer_pos = 0;
-	push("{", NULL);
+	push("{");
 	push_message (M);
-	push("}", NULL);
+	push("}");
 	if (socket_answer_pos > 0) {
 		printf("Message length: %i\n", socket_answer_pos);
 		if( send(socked_fd, &socket_answer, socket_answer_pos , 0) < 0)
@@ -185,17 +185,17 @@ void push_chat (tgl_peer_t *P) {
 	push("\"title\":\"%s\", \"members_num\":%i",
 			P->chat.title, P->chat.users_num);
 	if (P->chat.user_list) {
-		push(", \"members\": [", NULL);
+		push(", \"members\": [");
 		int i;
 		for (i = 0; i < P->chat.users_num; i++) {
 			if (i != 0) {
-				push(", ", NULL);
+				push(", ");
 			}
 			tgl_peer_id_t id = TGL_MK_USER (P->chat.user_list[i].user_id);
 			push_peer (id, tgl_peer_get (TLS, id));
 
 		}
-		push("]", NULL);
+		push("]");
 	}
 }
 void push_encr_chat (tgl_peer_t *P) {
@@ -221,7 +221,7 @@ void push_peer (tgl_peer_id_t id, tgl_peer_t *P) {
 			default:
 				assert (0);
 		}
-		push("\"}", NULL);
+		push("\"}");
 		return;
 
 	}
@@ -266,17 +266,17 @@ void push_size(int size){
 
 
 void push_media (struct tgl_message_media *M) {
-	push("{", NULL);
+	push("{");
 	switch (M->type) {
 		case tgl_message_media_photo:
-			push("\"type\": \"photo\", \"encrypted\": false", NULL);
+			push("\"type\": \"photo\", \"encrypted\": false");
 			if (M->photo.caption && strlen (M->photo.caption))
 			{
 				push (", \"caption\":\"%s\"", expand_escapes_alloc(M->photo.caption));
 			}
 			break;
 		case tgl_message_media_photo_encr:
-			push("\"type\": \"photo\", \"encrypted\": true", NULL);
+			push("\"type\": \"photo\", \"encrypted\": true");
 			break;
 			/*case tgl_message_media_video:
 			  case tgl_message_media_video_encr:
@@ -289,7 +289,7 @@ void push_media (struct tgl_message_media *M) {
 				lua_add_string_field ("type", "audio");
 				break;*/
 		case tgl_message_media_document:
-			push("\"type\": \"document\", \"encrypted\": false, \"document\":\"", NULL);
+			push("\"type\": \"document\", \"encrypted\": false, \"document\":\"");
 			if (M->document.flags & FLAG_DOCUMENT_IMAGE) {
 				push("image");
 			} else if (M->document.flags & FLAG_DOCUMENT_AUDIO) {
@@ -322,7 +322,7 @@ void push_media (struct tgl_message_media *M) {
 			push_size(M->document.size);
 			break;
 		case tgl_message_media_document_encr:
-			push("\"type\": \"document\", \"encrypted\": true, \"document\":\"", NULL);
+			push("\"type\": \"document\", \"encrypted\": true, \"document\":\"");
 			if (M->encr_document.flags & FLAG_DOCUMENT_IMAGE) {
 				push("image");
 			} else if (M->encr_document.flags & FLAG_DOCUMENT_AUDIO) {
@@ -355,10 +355,10 @@ void push_media (struct tgl_message_media *M) {
 			push_size(M->encr_document.size);
 			break;
 		case tgl_message_media_unsupported:
-			push("\"type\": \"unsupported\"", NULL);
+			push("\"type\": \"unsupported\"");
 			break;
 		case tgl_message_media_geo:
-			push("\"type\": \"geo\", ", NULL);
+			push("\"type\": \"geo\", ");
 			push_geo(M->geo);
 			push(", \"google\":\"https://maps.google.com/?q=%.6lf,%.6lf\"", M->geo.latitude, M->geo.longitude);
 			break;
@@ -369,31 +369,31 @@ void push_media (struct tgl_message_media *M) {
 			push("\"type\": \"\?\?\?\", \"typeid\":\"%d\"", M->type); //escaped "???" to avoid Trigraph. (see http://stackoverflow.com/a/1234618 )
 			break;
 	}
-	push("}", NULL);
+	push("}");
 }
 
 void push_message (struct tgl_message *M) {
 	if (!(M->flags & FLAG_CREATED)) { return; }
 	push("\"id\":%lld, \"flags\": %i, \"forward\":", M->id, M->flags);
 	if (tgl_get_peer_type (M->fwd_from_id)) {
-		push("{\"from\": ", NULL);
+		push("{\"from\": ");
 		push_peer (M->fwd_from_id, tgl_peer_get (TLS, M->fwd_from_id));
 		push(", \"date\": %i}", M->fwd_date);
 	} else {
-		push("null", NULL);
+		push("null");
 	}
-	push(", \"from\":", NULL);
+	push(", \"from\":");
 	push_peer (M->from_id, tgl_peer_get (TLS, M->from_id));
-	push(", \"to\":", NULL);
+	push(", \"to\":");
 	push_peer (M->to_id, tgl_peer_get (TLS, M->to_id));
 	push(", \"out\": %s, \"unread\":%s, \"date\":%i, \"service\":%s", format_bool(M->out), format_bool(M->unread), M->date, format_bool(M->service) );
 
 	if (!M->service) {
 		if (M->message_len && M->message) {
-			push(", \"text\": \"%.*s\"", M->message_len, expand_escapes_alloc(M->message)); // http://stackoverflow.com/a/3767300 //TODO: escape!
+			push(", \"text\": \"%s\"", expand_escapes_alloc(M->message)); // http://stackoverflow.com/a/3767300 //TODO: escape!
 		}
 		if (M->media.type && M->media.type != tgl_message_media_none) {
-			push(", \"media\":", NULL);
+			push(", \"media\":");
 			push_media (&M->media);
 		}
 	}
