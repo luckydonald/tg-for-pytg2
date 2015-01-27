@@ -60,7 +60,7 @@ struct sockaddr_in serv_addr;
 #define DEFAULT_PORT 4458
 
 void socket_init (char *address_string);
-void socket_send(char *message);
+void socket_send(char *message); //TODO?
 
 void lua_init(const char *address_string);
 void lua_new_msg (struct tgl_message *M);
@@ -71,7 +71,8 @@ void lua_init (const char *address_string) {
 	socket_init(address_string_copy);
 }
 void push_message (struct tgl_message *M);
-void expand_escapes_alloc(char* dest, const char* src);
+char* expand_escapes_alloc(const char* src);
+
 
 static void socket_answer_add_printf (const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 void socket_answer_add_printf (const char *format, ...) {
@@ -205,6 +206,7 @@ void push_encr_chat (tgl_peer_t *P) {
 void push_peer (tgl_peer_id_t id, tgl_peer_t *P) {
 	push("{");
 	push("\"id\":%i, \"type\":\"%s\", \"print_name\": \"", tgl_get_peer_id (id), format_peer_type (tgl_get_peer_type (id)));
+	//Note: opend quote for print_name's value!
 	if (!P || !(P->flags & FLAG_CREATED)) {
 		switch (tgl_get_peer_type (id)) {
 			case TGL_PEER_USER:
@@ -245,14 +247,36 @@ void push_peer (tgl_peer_id_t id, tgl_peer_t *P) {
 
 	push(", \"flags\": %i}",  P->flags);
 }
+void push_geo(struct tgl_geo geo) {
+	push("\"longitude\": %f, \"latitude\": %f", geo.longitude, geo.latitude);
+}
+void push_size(int size){
+	push("\"size\":\"");
+	if (size < (1 << 10)) {
+		push("%dB", size);
+	} else if (size < (1 << 20)) {
+		push("%dKiB", size >> 10);
+	} else if (size < (1 << 30)) {
+		push("%dMiB", size >> 20);
+	} else {
+		push("%dGiB", size >> 30);
+	}
+	push("\", \"bytes\":%d", size);
+}
 
 
 void push_media (struct tgl_message_media *M) {
 	push("{", NULL);
 	switch (M->type) {
 		case tgl_message_media_photo:
+			push("\"type\": \"photo\", \"encrypted\": false", NULL);
+			if (M->photo.caption && strlen (M->photo.caption))
+			{
+				push (", \"caption\":\"%s\"", expand_escapes_alloc(M->photo.caption));
+			}
+			break;
 		case tgl_message_media_photo_encr:
-			push("\"type\": \"photo\"", NULL);
+			push("\"type\": \"photo\", \"encrypted\": true", NULL);
 			break;
 			/*case tgl_message_media_video:
 			  case tgl_message_media_video_encr:
@@ -265,20 +289,84 @@ void push_media (struct tgl_message_media *M) {
 				lua_add_string_field ("type", "audio");
 				break;*/
 		case tgl_message_media_document:
+			push("\"type\": \"document\", \"encrypted\": false, \"document\":\"", NULL);
+			if (M->document.flags & FLAG_DOCUMENT_IMAGE) {
+				push("image");
+			} else if (M->document.flags & FLAG_DOCUMENT_AUDIO) {
+				push("audio");
+			} else if (M->document.flags & FLAG_DOCUMENT_VIDEO) {
+				push("video");
+			} else if (M->document.flags & FLAG_DOCUMENT_STICKER) {
+				push("sticker");
+			} else {
+				push("document");
+			}
+			push("\""); //end of document's value.
+
+			if (M->document.caption && strlen (M->document.caption)) {
+				push(", \"caption\":\"%s\"", expand_escapes_alloc(M->document.caption));
+			}
+
+			if (M->document.mime_type) {
+				push(", \"mime\":\"%s\"", M->document.mime_type);
+			}
+
+			if (M->document.w && M->document.h) {
+				push(", \"dimension\":{\"width\":%d,\"height\":%d}", M->document.w, M->document.h);
+			}
+
+			if (M->document.duration) {
+				push(", \"duration\":%d", M->document.duration);
+			}
+			push(", ");
+			push_size(M->document.size);
+			break;
 		case tgl_message_media_document_encr:
-			push("\"type\": \"document\"", NULL);
+			push("\"type\": \"document\", \"encrypted\": true, \"document\":\"", NULL);
+			if (M->encr_document.flags & FLAG_DOCUMENT_IMAGE) {
+				push("image");
+			} else if (M->encr_document.flags & FLAG_DOCUMENT_AUDIO) {
+				push("audio");
+			} else if (M->encr_document.flags & FLAG_DOCUMENT_VIDEO) {
+				push("video");
+			} else if (M->encr_document.flags & FLAG_DOCUMENT_STICKER) {
+				push("sticker");
+			} else {
+				push("document");
+			}
+			push("\""); //end of document's value.
+
+			if (M->encr_document.caption && strlen (M->document.caption)) {
+				push(", \"caption\":\"%s\"", expand_escapes_alloc(M->document.caption));
+			}
+
+			if (M->encr_document.mime_type) {
+				push(", \"mime\":\"%s\"", M->document.mime_type);
+			}
+
+			if (M->encr_document.w && M->document.h) {
+				push(", \"dimension\":{\"width\":%d,\"height\":%d}", M->document.w, M->document.h);
+			}
+
+			if (M->encr_document.duration) {
+				push(", \"duration\":%d", M->encr_document.duration);
+			}
+			push(", ");
+			push_size(M->encr_document.size);
 			break;
 		case tgl_message_media_unsupported:
 			push("\"type\": \"unsupported\"", NULL);
 			break;
 		case tgl_message_media_geo:
-			push("\"type\": \"geo\", \"longitude\": %f, \"latitude\": %f", M->geo.longitude, M->geo.latitude);
+			push("\"type\": \"geo\", ", NULL);
+			push_geo(M->geo);
+			push(", \"google\":\"https://maps.google.com/?q=%.6lf,%.6lf\"", M->geo.latitude, M->geo.longitude);
 			break;
 		case tgl_message_media_contact:
 			push("\"type\": \"contact\", \"phone\": \"%s\", \"first_name\": \"%s\", \"last_name\": \"%s\", \"user_id\": %i",  M->phone, M->first_name, M->last_name, M->user_id);
 			break;
 		default:
-			push("\"type\": \"\?\?\?\"", NULL); //escaped "???" to avoid Trigraph. (see http://stackoverflow.com/a/1234618 )
+			push("\"type\": \"\?\?\?\", \"typeid\":\"%d\"", M->type); //escaped "???" to avoid Trigraph. (see http://stackoverflow.com/a/1234618 )
 			break;
 	}
 	push("}", NULL);
@@ -309,7 +397,7 @@ void push_message (struct tgl_message *M) {
 			push_media (&M->media);
 		}
 	}
-	push("}",NULL);
+	// is no dict => no "}".
 }
 
 // http://stackoverflow.com/a/3535143
@@ -317,7 +405,7 @@ void expand_escapes(char* dest, const char* src)
 {
 	char c;
 
-	while (c = *(src++)) {
+	while ((c = *(src++))) {
 		switch(c) {
 			case '\a':
 				*(dest++) = '\\';
@@ -375,222 +463,6 @@ char* expand_escapes_alloc(const char* src)
 }
 
 /*
-void push_message (struct tgl_message *M) {
-	assert (M);
-	static char s[30];
-	snprintf (s, 30, "%lld", M->id);
-	lua_add_string_field ("id", s);
-	if (!(M->flags & FLAG_CREATED)) { return; }
-	lua_add_num_field ("flags", M->flags);
-
-	if (tgl_get_peer_type (M->fwd_from_id)) {
-		lua_pushstring (luaState, "fwd_from");
-		push_peer (M->fwd_from_id, tgl_peer_get (TLS, M->fwd_from_id));
-		lua_settable (luaState, -3); // fwd_from
-
-		lua_add_num_field ("fwd_date", M->fwd_date);
-	}
-
-	lua_pushstring (luaState, "from");
-	push_peer (M->from_id, tgl_peer_get (TLS, M->from_id));
-	lua_settable (luaState, -3);
-
-	lua_pushstring (luaState, "to");
-	push_peer (M->to_id, tgl_peer_get (TLS, M->to_id));
-	lua_settable (luaState, -3);
-
-	lua_pushstring (luaState, "out");
-	lua_pushboolean (luaState, M->out);
-	lua_settable (luaState, -3);
-
-	lua_pushstring (luaState, "unread");
-	lua_pushboolean (luaState, M->unread);
-	lua_settable (luaState, -3);
-
-	lua_pushstring (luaState, "date");
-	lua_pushnumber (luaState, M->date);
-	lua_settable (luaState, -3);
-
-	lua_pushstring (luaState, "service");
-	lua_pushboolean (luaState, M->service);
-	lua_settable (luaState, -3);
-
-	printf("{'id':%lld, 'flags': %i, 'forward':null, 'from':%s, 'to':%s, 'out':%s, 'unread':%s, 'date':%i, 'service':%s, 'text':'%s'}",
-			M->id, M->flags, format_peer(M->from_id), format_peer(M->to_id),format_bool(M->out), format_bool(M->unread), M->date, format_bool(M->service), (M->message_len && M->message ?  M->message : ""));
-
-	if (!M->service) {
-		if (M->message_len && M->message) {
-			lua_pushstring (luaState, "text");
-			lua_pushlstring (luaState, M->message, M->message_len);
-			lua_settable (luaState, -3);
-		}
-		if (M->media.type && M->media.type != tgl_message_media_none) {
-			lua_pushstring (luaState, "media");
-			push_media (&M->media);
-			lua_settable (luaState, -3);
-		}
-	}
-}
-
-*/
-
-/*
-void print_message (struct in_ev *ev, struct tgl_message *M) {
-	assert (M);
-	if (M->flags & (FLAG_MESSAGE_EMPTY | FLAG_DELETED)) {
-		return;
-	}
-	if (!(M->flags & FLAG_CREATED)) { return; }
-	if (M->service) {
-		print_service_message (ev, M);
-		return;
-	}
-	if (!tgl_get_peer_type (M->to_id)) {
-		logprintf ("Bad msg\n");
-		return;
-	}
-
-	last_from_id = M->from_id;
-	last_to_id = M->to_id;
-
-	//print_start ();
-	if (tgl_get_peer_type (M->to_id) == TGL_PEER_USER) {
-		if (M->out) {
-			mprintf (ev, "%lld ", M->id);
-			print_date (ev, M->date);
-			mpop_color (ev);
-			mprintf (ev, " ");
-			print_user_name (ev, M->to_id, tgl_peer_get (TLS, M->to_id));
-			mpush_color (ev, COLOR_GREEN);
-			if (M->unread) {
-				mprintf (ev, " <<< ");
-			} else {
-				mprintf (ev, " ««« ");
-			}
-		} else {
-			mpush_color (ev, COLOR_BLUE);
-			if (msg_num_mode) {
-				mprintf (ev, "%lld ", M->id);
-			}
-			print_date (ev, M->date);
-			mpop_color (ev);
-			mprintf (ev, " ");
-			print_user_name (ev, M->from_id, tgl_peer_get (TLS, M->from_id));
-			mpush_color (ev, COLOR_BLUE);
-			if (M->unread) {
-				mprintf (ev, " >>> ");
-			} else {
-				mprintf (ev, " »»» ");
-			}
-		}
-	} else if (tgl_get_peer_type (M->to_id) == TGL_PEER_ENCR_CHAT) {
-		tgl_peer_t *P = tgl_peer_get (TLS, M->to_id);
-		assert (P);
-		if (M->out) {
-			mpush_color (ev, COLOR_GREEN);
-			if (msg_num_mode) {
-				mprintf (ev, "%lld ", M->id);
-			}
-			print_date (ev, M->date);
-			mprintf (ev, " ");
-			mpush_color (ev, COLOR_CYAN);
-			mprintf (ev, " %s", P->print_name);
-			mpop_color (ev);
-			if (M->unread) {
-				mprintf (ev, " <<< ");
-			} else {
-				mprintf (ev, " ««« ");
-			}
-		} else {
-			mpush_color (ev, COLOR_BLUE);
-			if (msg_num_mode) {
-				mprintf (ev, "%lld ", M->id);
-			}
-			print_date (ev, M->date);
-			mpush_color (ev, COLOR_CYAN);
-			mprintf (ev, " %s", P->print_name);
-			mpop_color (ev);
-			if (M->unread) {
-				mprintf (ev, " >>> ");
-			} else {
-				mprintf (ev, " »»» ");
-			}
-		}
-	} else {
-		assert (tgl_get_peer_type (M->to_id) == TGL_PEER_CHAT);
-		mpush_color (ev, COLOR_MAGENTA);
-		if (msg_num_mode) {
-			mprintf (ev, "%lld ", M->id);
-		}
-		print_date (ev, M->date);
-		mpop_color (ev);
-		mprintf (ev, " ");
-		print_chat_name (ev, M->to_id, tgl_peer_get (TLS, M->to_id));
-		mprintf (ev, " ");
-		print_user_name (ev, M->from_id, tgl_peer_get (TLS, M->from_id));
-		if ((tgl_get_peer_type (M->from_id) == TGL_PEER_USER) && (tgl_get_peer_id (M->from_id) == TLS->our_id)) {
-			mpush_color (ev, COLOR_GREEN);
-		} else {
-			mpush_color (ev, COLOR_BLUE);
-		}
-		if (M->unread) {
-			mprintf (ev, " >>> ");
-		} else {
-			mprintf (ev, " »»» ");
-		}
-	}
-	if (tgl_get_peer_type (M->fwd_from_id) == TGL_PEER_USER) {
-		mprintf (ev, "[fwd from ");
-		print_user_name (ev, M->fwd_from_id, tgl_peer_get (TLS, M->fwd_from_id));
-		mprintf (ev, "] ");
-	}
-	if (M->message && strlen (M->message)) {
-		mprintf (ev, "%s", M->message);
-	}
-	if (M->media.type != tgl_message_media_none) {
-		print_media (ev, &M->media);
-	}
-	mpop_color (ev);
-	assert (!color_stack_pos);
-	mprintf (ev, "\n");
-	//print_end();
-}
-
-
-void lua_new_msg (struct tgl_message *M) {
-	sprintf(socket_answer, "%i ", M->id,);
-	355 [19 Jan] {print_message} chat#Ponies!!!#1145512 user#Danu Griese#31229512 »»» Wetter:{end_print_message}
-
-
-
-
-}
-
-
-struct tgl_message {
-	struct tgl_message *next_use, *prev_use;
-	struct tgl_message *next, *prev;
-	long long id;
-	int flags;
-	tgl_peer_id_t fwd_from_id;
-	int fwd_date;
-	tgl_peer_id_t from_id;
-	tgl_peer_id_t to_id;
-	int out;
-	int unread;
-	int date;
-	int service;
-	union {
-		struct tgl_message_action action;
-		struct {
-			char *message;
-			int message_len;
-			struct tgl_message_media media;
-		};
-	};
-};
-
-
 
 void check () {
 	closed = 1;
