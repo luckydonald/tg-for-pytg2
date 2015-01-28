@@ -60,7 +60,7 @@ struct sockaddr_in serv_addr;
 #define DEFAULT_PORT 4458
 
 void socket_init (char *address_string);
-void socket_send(char *message); //TODO?
+void socket_connect();
 
 void lua_init(const char *address_string);
 void lua_new_msg (struct tgl_message *M);
@@ -69,6 +69,7 @@ void lua_init (const char *address_string) {
 	char *address_string_copy = malloc(sizeof(char) * strnlen(address_string,23));
 	strcpy(address_string_copy, address_string);
 	socket_init(address_string_copy);
+	socket_connect();
 }
 void push_message (struct tgl_message *M);
 char* expand_escapes_alloc(const char* src);
@@ -98,18 +99,20 @@ void lua_new_msg (struct tgl_message *M) {
 	push("}");
 	if (socket_answer_pos > 0) {
 		printf("Message length: %i\n", socket_answer_pos);
-		if( send(socked_fd, &socket_answer, socket_answer_pos , 0) < 0)
+		while( send(socked_fd, &socket_answer, socket_answer_pos , 0) < 0)
 		{
 			puts("Send failed.");
-		} else {
-			puts("Did send.");
+			socket_connect();
 		}
+			puts("Did send.");
 	}
 	socket_answer_pos = -1;
 }
 
-void socket_init (char *address_string) {
-	if (address_string == NULL) {
+void socket_init (char *address_string)
+{
+	if (address_string == NULL)
+	{
 		printf("No address and no port given.\n");
 		exit(3);
 	}
@@ -117,13 +120,21 @@ void socket_init (char *address_string) {
 	uint16_t port = DEFAULT_PORT;
 	strtok(address_string, ":");
 	port_pos = strtok(NULL, ":"); //why is it needed doubled?
-	if (port_pos == NULL) {
-		printf("Address: \"%s\", no port given, using port %i instead.\n" , address_string, port);
-	} else {
-		port = atoi (port_pos);
-		printf("Address: \"%s\", IP: %i.\n", address_string,port);
+	if (port_pos == NULL)
+	{
+		printf("Address: \"%s\", no port given, using port %i instead.\n", address_string, port);
 	}
-
+	else
+	{
+		port = atoi(port_pos);
+		printf("Address: \"%s\", IP: %i.\n", address_string, port);
+	}
+	memset((void *) &serv_addr, 0, sizeof(struct sockaddr_in));
+	serv_addr.sin_family = AF_INET; //still TCP
+	inet_pton(AF_INET, address_string, &(serv_addr.sin_addr)); //copy the adress.
+	serv_addr.sin_port = (in_port_t) htons((uint16_t) port);
+}
+void socket_connect() {
 	socked_fd = socket(AF_INET, SOCK_STREAM, 0); //lets do UDP Socket and listener_d is the Descriptor
 	if (socked_fd == -1)
 	{
@@ -132,10 +143,7 @@ void socket_init (char *address_string) {
 	} else {
 		printf("Socket opened.\n");
 	}
-	memset((void *) &serv_addr, 0, sizeof(struct sockaddr_in));
-	serv_addr.sin_family = AF_INET; //still TCP
-	inet_pton(AF_INET, address_string, &(serv_addr.sin_addr)); //copy the adress.
-	serv_addr.sin_port = (in_port_t) htons((uint16_t)port);
+
 	int connection = connect(socked_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
 	if (connection == -1) {
 		printf("I can't connect!\n");
@@ -196,8 +204,9 @@ void push_chat (tgl_peer_t *P) {
 
 		}
 		push("]");
-	}
+	} // end if
 }
+
 void push_encr_chat (tgl_peer_t *P) {
 	push ("\"user\": ");
 	push_peer (TGL_MK_USER (P->encr_chat.user_id), tgl_peer_get (TLS, TGL_MK_USER (P->encr_chat.user_id)));
