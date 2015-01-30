@@ -281,7 +281,9 @@ void push_media (struct tgl_message_media *M) {
 			push("\"type\": \"photo\", \"encrypted\": false");
 			if (M->photo.caption && strlen (M->photo.caption))
 			{
-				push (", \"caption\":\"%s\"", expand_escapes_alloc(M->photo.caption));
+				char *escaped_caption = expand_escapes_alloc(M->photo.caption);
+				push (", \"caption\":\"%s\"", escaped_caption);
+				free(escaped_caption);
 			}
 			break;
 		case tgl_message_media_photo_encr:
@@ -313,7 +315,9 @@ void push_media (struct tgl_message_media *M) {
 			push("\""); //end of document's value.
 
 			if (M->document.caption && strlen (M->document.caption)) {
-				push(", \"caption\":\"%s\"", expand_escapes_alloc(M->document.caption));
+				char *escaped_caption = expand_escapes_alloc(M->document.caption);
+				push(", \"caption\":\"%s\"", escaped_caption);
+				free(escaped_caption);
 			}
 
 			if (M->document.mime_type) {
@@ -346,7 +350,9 @@ void push_media (struct tgl_message_media *M) {
 			push("\""); //end of document's value.
 
 			if (M->encr_document.caption && strlen (M->document.caption)) {
-				push(", \"caption\":\"%s\"", expand_escapes_alloc(M->document.caption));
+				char *escaped_caption = expand_escapes_alloc(M->document.caption);
+				push(", \"caption\":\"%s\"", escaped_caption);
+				free(escaped_caption);
 			}
 
 			if (M->encr_document.mime_type) {
@@ -399,7 +405,9 @@ void push_message (struct tgl_message *M) {
 
 	if (!M->service) {
 		if (M->message_len && M->message) {
-			push(", \"text\": \"%s\"", expand_escapes_alloc(M->message)); // http://stackoverflow.com/a/3767300 //TODO: escape!
+			char *escaped_message = expand_escapes_alloc(M->message);
+			push(", \"text\": \"%s\"", escaped_message); // http://stackoverflow.com/a/3767300 //TODO: escape!
+			free(escaped_message);
 		}
 		if (M->media.type && M->media.type != tgl_message_media_none) {
 			push(", \"media\":");
