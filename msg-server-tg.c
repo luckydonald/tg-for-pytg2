@@ -87,6 +87,8 @@ struct rk_sema *edit_socket_status;
 #define DEFAULT_PORT 4458
 
 void socket_init (char *address_string);
+int answer_start();
+void answer_end();
 void socket_connect();
 void socket_send();
 void socket_close();
@@ -94,7 +96,6 @@ void socket_close();
 void lua_init(const char *address_string);
 void lua_new_msg (struct tgl_message *M);
 void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, char *file_name);
-
 
 char* expand_escapes_alloc(const char* src);
 
@@ -118,7 +119,7 @@ union function_args {
 	struct { struct tgl_state *TLSR; void *cb_extra; int success; char *file_name;} file_download;
 };
 struct function {
-	void *callback;
+	void (*callback)(union function_args *);
 	union function_args *args;
 	struct function *next;
 
@@ -153,27 +154,22 @@ struct function *pop_function (){
 	return tmp;
 }
 
-void postpone(void *func) {
-	struct function *appendum = malloc(sizeof(struct function));
-	appendum->callback = func;
-	appendum->args = args;
-	appendum->next = NULL;
-
-	append_function(appendum);
+void postpone(struct function *func) {
+	append_function(func);
 }
 void postpone_execute_next() {
 	struct function *func = pop_function();
 	if(func != NULL)  // Queue is not empty.
 	{
-		void *callback = func->callback;
+		void (*callback) (union function_args *args) = func->callback;
 		if (func->args)
 		{
-			void *args = func->args;
-				void callback(*args);
+			union function_args *args = func->args;
+			callback(args);
 		}
 		else
 		{
-			void callback();
+			callback(NULL);
 		}
 	}
 	free(func->args);
@@ -182,6 +178,7 @@ void postpone_execute_next() {
 
 void lua_new_msg (struct tgl_message *M)
 {
+	answer_start();
 	printf("Sending Message...\n");
 	push("{\"event\": \"message\", ");
 	push_message (M);
@@ -190,9 +187,11 @@ void lua_new_msg (struct tgl_message *M)
 	socket_connect();
 	socket_send();
 	socket_close();
+	answer_end();
 }
 
 
+void lua_file_callbackback(union function_args *arg);
 
 //actually is not external/lua call, but the defined callback.
 void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, char *file_name) {
@@ -202,20 +201,27 @@ void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, cha
 	arg->file_download.cb_extra = cb_extra;
 	arg->file_download.success = success;
 	arg->file_download.file_name = file_name;
-	if (socket_answer_start()){
+	if (answer_start()){
 		lua_file_callbackback(arg);
 		free(arg);
+		answer_end();
 	}
 	else {
 		struct function *new = malloc(sizeof(struct function));
 		new->callback = lua_file_callbackback;
-		new->type = FILE_DOWNLOAD;
 		new->args = arg;
 		new->next = NULL;
 		postpone(new);
 	}
 }
 void lua_file_callbackback(union function_args *arg) {
+	if (!answer_start()){
+		struct function *new = malloc(sizeof(struct function));
+		new->callback = lua_file_callbackback;
+		new->args = arg;
+		new->next = NULL;
+		postpone(new);
+	}
 	char *file_name = arg->file_download.file_name;
 	int success = arg->file_download.success;
 	if (success) {
@@ -280,7 +286,7 @@ void socket_connect() {
 		}
 	}
 }
-int socket_answer_start() {
+int answer_start() {
 	rk_sema_wait(edit_socket_status);
 	if(socked_in_use) {
 		rk_sema_post(edit_socket_status);
@@ -291,7 +297,7 @@ int socket_answer_start() {
 	rk_sema_post(edit_socket_status);
 	return 1;
 }
-void socket_answer_end() {
+void answer_end() {
 	rk_sema_wait(edit_socket_status);
 	socked_in_use = 0;
 	rk_sema_post(edit_socket_status);
