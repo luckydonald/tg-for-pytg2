@@ -114,7 +114,8 @@ void lua_init (const char *address_string) {
 	//socket_close();
 }
 union function_args {
-	struct { struct tgl_state *TLSR; void *cb_extra; int success; char *file_name;} file_download;
+	struct {
+		int success; void *cb_extra; char *file_name;} file_download;
 };
 struct function {
 	void (*callback)(union function_args *);
@@ -194,13 +195,12 @@ void lua_file_callbackback(union function_args *arg);
 //actually is not external/lua call, but the defined callback.
 void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, char *file_name) {
 	assert (TLSR == TLS);
-	printf("Downloaded to (1): %s\n", file_name);
 	union function_args *arg = malloc(sizeof(union function_args));
-	arg->file_download.TLSR = TLSR;
-	arg->file_download.cb_extra = cb_extra;
 	arg->file_download.success = success;
-	arg->file_download.file_name = file_name;
-	printf("Downloaded to (2): %s\n", arg->file_download.file_name);
+	arg->file_download.cb_extra = cb_extra;
+	char *file_name_persistent = malloc(strlen(file_name));
+	memcpy(file_name_persistent, file_name, strlen(file_name));
+	arg->file_download.file_name = file_name_persistent;
 	if (answer_started()){
 		lua_file_callbackback(arg);
 		free(arg);
@@ -215,7 +215,6 @@ void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, cha
 	}
 }
 void lua_file_callbackback(union function_args *arg) {
-	printf("Downloaded to (3): %s\n", arg->file_download.file_name);
 	if (answer_started()){
 		struct function *new = malloc(sizeof(struct function));
 		new->callback = lua_file_callbackback;
@@ -228,15 +227,15 @@ void lua_file_callbackback(union function_args *arg) {
 	}
 	answer_start();
 	char *file_name = arg->file_download.file_name;
-	printf("Downloaded to (4): %s\n", arg->file_download.file_name);
-	printf("Downloaded to (5): %s\n", file_name);
-
+	long long int *msg_id = arg->file_download.cb_extra;
 	int success = arg->file_download.success;
 	if (success) {
-		push("{\"event\":\"download\", \"file\":\"%s\"}", file_name); //TODO: msg number.
+		push("{\"event\":\"download\", \"id\":%lld, \"file\":\"%s\"}", *msg_id, file_name); //TODO: msg number.
 	} else {
-		push("{\"event\":\"download\",\"file\":null}");
+		push("{\"event\":\"download\", \"id\":%lld, \"file\":null}", *msg_id);
 	}
+	free(file_name);
+	free(msg_id);
 	socket_connect();
 	socket_send();
 	socket_close();
@@ -321,6 +320,10 @@ void socket_send()
 		ssize_t sent = 0;
 		int start = 0;
 		size_t size = BLOCK_SIZE;
+		if(answer_pos - start < (int)size) // less than a size block.
+		{
+			size = (size_t)(answer_pos - start); //what is left.
+		}
 		while( start < answer_pos)
 		{
 			//printf("send(%i, (void *)(%p  + %i)=%p, %li, 0)",socked_fd, &socket_answer, start, (void *)(socket_answer  + start),size);
@@ -333,7 +336,7 @@ void socket_send()
 			start += sent;
 			if(answer_pos - start < (int)size) // less than a size block.
 			{
-				size = (size_t)((int)answer_pos - (int)start); //what is left.
+				size = (size_t)(answer_pos - start); //what is left.
 			}
 			//printf("starting %i, going %li\n", start, size);
 		}
@@ -341,7 +344,7 @@ void socket_send()
 		{
 			puts("Did send.");
 		} else {
-			puts("Didn't send.");
+			printf("Didn't send, start (%i) != answer_pos (%i)", start, answer_pos);
 		}
 		memset(socket_answer, 0, answer_pos); //reset da data.
 		answer_pos = -1;
@@ -505,8 +508,10 @@ void push_size(int size){
 }
 
 
-void push_media (struct tgl_message_media *M) {
+void push_media(struct tgl_message_media *M, long long int *msg_id)
+{
 	push("{");
+	long long int *msg_id_copy;
 	switch (M->type) {
 		case tgl_message_media_photo:
 			push("\"type\": \"photo\", \"encrypted\": false");
@@ -516,7 +521,9 @@ void push_media (struct tgl_message_media *M) {
 				push (", \"caption\":\"%s\"", escaped_caption); //file name afterwards.
 				free(escaped_caption);
 			}
-			tgl_do_load_photo (TLS, &M->photo, lua_file_callback, NULL);
+			msg_id_copy = malloc(sizeof(*msg_id));
+			memcpy(msg_id_copy, msg_id, sizeof(*msg_id));
+			tgl_do_load_photo (TLS, &M->photo, lua_file_callback, msg_id_copy);
 			break;
 		case tgl_message_media_photo_encr:
 			push("\"type\": \"photo\", \"encrypted\": true");
@@ -545,7 +552,9 @@ void push_media (struct tgl_message_media *M) {
 				push("document");
 			}
 			push("\"");
-			tgl_do_load_document (TLS, &M->document, lua_file_callback, NULL); // will download & insert file name.
+			msg_id_copy = malloc(sizeof(*msg_id));
+			memcpy(msg_id_copy, msg_id, sizeof(*msg_id));
+			tgl_do_load_document (TLS, &M->document, lua_file_callback, msg_id_copy); // will download & insert file name.
 			//TODO: wait until the callback pushed the filename.
 			if (M->document.caption && strlen (M->document.caption)) {
 				char *escaped_caption = expand_escapes_alloc(M->document.caption);
@@ -581,7 +590,9 @@ void push_media (struct tgl_message_media *M) {
 				push("document");
 			}
 			push("\""); //end of document's value, next is file name.
-			tgl_do_load_encr_document (TLS, &M->encr_document, lua_file_callback, NULL); // will download & insert file name.
+			msg_id_copy = malloc(sizeof(*msg_id));
+			memcpy(msg_id_copy, msg_id, sizeof(*msg_id));
+			tgl_do_load_encr_document (TLS, &M->encr_document, lua_file_callback, msg_id_copy); // will download & insert file name.
 			//TODO: wait until the callback pushed the filename.
 			if (M->encr_document.caption && strlen (M->document.caption)) {
 				char *escaped_caption = expand_escapes_alloc(M->document.caption);
@@ -645,7 +656,7 @@ void push_message (struct tgl_message *M) {
 		if (M->media.type && M->media.type != tgl_message_media_none) {
 			push(", \"media\":");
 			printf("1-predownload\n");
-			push_media (&M->media);
+			push_media(&M->media, &M->id);
 			printf("1-postdownload\n");
 		}
 	}
