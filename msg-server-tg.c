@@ -53,10 +53,7 @@ bin/telegram-cli -s 127.0.0.1:4458
 #include <arpa/inet.h>
 #include <assert.h>
 
-// string length strnlen()
-#include <string.h>
 #include <sys/errno.h>
-#include <stddef.h>
 
 
 
@@ -87,6 +84,7 @@ struct rk_sema *edit_socket_status;
 #define DEFAULT_PORT 4458
 
 void socket_init (char *address_string);
+int answer_started();
 int answer_start();
 void answer_end();
 void socket_connect();
@@ -133,6 +131,7 @@ struct function *get_last_function(struct function *func){
 	}
 }
 struct function *delayed_callbacks;
+
 void append_function (struct function *func){
 	rk_sema_wait(edit_list);
 	if (delayed_callbacks == NULL) {
@@ -161,18 +160,18 @@ void postpone_execute_next() {
 	struct function *func = pop_function();
 	if(func != NULL)  // Queue is not empty.
 	{
-		void (*callback) (union function_args *args) = func->callback;
+		void (*callback) (union function_args *) = func->callback;
 		if (func->args)
 		{
 			union function_args *args = func->args;
 			callback(args);
+			free(func->args);
 		}
 		else
 		{
 			callback(NULL);
 		}
 	}
-	free(func->args);
 	free(func);
 }
 
@@ -183,7 +182,6 @@ void lua_new_msg (struct tgl_message *M)
 	push("{\"event\": \"message\", ");
 	push_message (M);
 	push("}");
-	//*(socket_answer + answer_pos + 1) = '\0';
 	socket_connect();
 	socket_send();
 	socket_close();
@@ -196,12 +194,14 @@ void lua_file_callbackback(union function_args *arg);
 //actually is not external/lua call, but the defined callback.
 void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, char *file_name) {
 	assert (TLSR == TLS);
+	printf("Downloaded to (1): %s\n", file_name);
 	union function_args *arg = malloc(sizeof(union function_args));
 	arg->file_download.TLSR = TLSR;
 	arg->file_download.cb_extra = cb_extra;
 	arg->file_download.success = success;
 	arg->file_download.file_name = file_name;
-	if (answer_start()){
+	printf("Downloaded to (2): %s\n", arg->file_download.file_name);
+	if (answer_started()){
 		lua_file_callbackback(arg);
 		free(arg);
 		answer_end();
@@ -215,14 +215,22 @@ void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, cha
 	}
 }
 void lua_file_callbackback(union function_args *arg) {
-	if (!answer_start()){
+	printf("Downloaded to (3): %s\n", arg->file_download.file_name);
+	if (answer_started()){
 		struct function *new = malloc(sizeof(struct function));
 		new->callback = lua_file_callbackback;
-		new->args = arg;
+		union function_args *args = malloc(sizeof(union function_args));
+		memcpy(args, arg, sizeof(union function_args));
+		new->args = args;
 		new->next = NULL;
 		postpone(new);
+		return;
 	}
+	answer_start();
 	char *file_name = arg->file_download.file_name;
+	printf("Downloaded to (4): %s\n", arg->file_download.file_name);
+	printf("Downloaded to (5): %s\n", file_name);
+
 	int success = arg->file_download.success;
 	if (success) {
 		push("{\"event\":\"download\", \"file\":\"%s\"}", file_name); //TODO: msg number.
@@ -285,6 +293,9 @@ void socket_connect() {
 			continue;
 		}
 	}
+}
+int answer_started() {
+	return socked_in_use;
 }
 int answer_start() {
 	rk_sema_wait(edit_socket_status);
@@ -498,15 +509,14 @@ void push_media (struct tgl_message_media *M) {
 	push("{");
 	switch (M->type) {
 		case tgl_message_media_photo:
-			push("\"type\": \"photo\", \"encrypted\": false, ");
+			push("\"type\": \"photo\", \"encrypted\": false");
 			if (M->photo.caption && strlen (M->photo.caption))
 			{
 				char *escaped_caption = expand_escapes_alloc(M->photo.caption);
-				push ("\"caption\":\"%s\", ", escaped_caption); //file name afterwards.
+				push (", \"caption\":\"%s\"", escaped_caption); //file name afterwards.
 				free(escaped_caption);
 			}
 			tgl_do_load_photo (TLS, &M->photo, lua_file_callback, NULL);
-			//TODO: wait until the callback pushed the filename.
 			break;
 		case tgl_message_media_photo_encr:
 			push("\"type\": \"photo\", \"encrypted\": true");
@@ -534,7 +544,7 @@ void push_media (struct tgl_message_media *M) {
 			} else {
 				push("document");
 			}
-			push("\", "); //end of document's value, next will be filename
+			push("\"");
 			tgl_do_load_document (TLS, &M->document, lua_file_callback, NULL); // will download & insert file name.
 			//TODO: wait until the callback pushed the filename.
 			if (M->document.caption && strlen (M->document.caption)) {
@@ -570,7 +580,7 @@ void push_media (struct tgl_message_media *M) {
 			} else {
 				push("document");
 			}
-			push("\", "); //end of document's value, next is file name.
+			push("\""); //end of document's value, next is file name.
 			tgl_do_load_encr_document (TLS, &M->encr_document, lua_file_callback, NULL); // will download & insert file name.
 			//TODO: wait until the callback pushed the filename.
 			if (M->encr_document.caption && strlen (M->document.caption)) {
