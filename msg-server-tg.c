@@ -46,6 +46,7 @@ bin/telegram-cli -s 127.0.0.1:4458
 
 // while debug:
 #include "tgl/tgl.h"
+#include "tgl/generate.h"
 
 // va_list, va_start, va_arg, va_end
 #include <stdarg.h>
@@ -81,6 +82,7 @@ int socked_fd = -1;
 struct sockaddr_in serv_addr;
 int socked_in_use = 0;
 struct rk_sema *edit_list;
+struct rk_sema *edit_socket_status;
 
 #define DEFAULT_PORT 4458
 
@@ -106,15 +108,20 @@ void lua_init (const char *address_string) {
 	strcpy(address_string_copy, address_string);
 	socket_init(address_string_copy);
 	edit_list = malloc(sizeof(struct rk_sema));
+	edit_socket_status = malloc(sizeof(struct rk_sema));
 	rk_sema_init(edit_list, 1); //can be lowered once.
+	rk_sema_init(edit_socket_status, 1); //can be lowered once.
 	//socket_connect();
 	//socket_close();
 }
+union function_args {
+	struct { struct tgl_state *TLSR; void *cb_extra; int success; char *file_name;} file_download;
+};
 struct function {
 	void *callback;
-	void *args;
-	void *structure;
+	union function_args *args;
 	struct function *next;
+
 };
 struct function *get_last_function(struct function *func){
 	assert(func);
@@ -145,11 +152,13 @@ struct function *pop_function (){
 	rk_sema_post(edit_list);
 	return tmp;
 }
-void postpone(void *func, void *args) {
+
+void postpone(void *func) {
 	struct function *appendum = malloc(sizeof(struct function));
 	appendum->callback = func;
 	appendum->args = args;
 	appendum->next = NULL;
+
 	append_function(appendum);
 }
 void postpone_execute_next() {
@@ -167,19 +176,12 @@ void postpone_execute_next() {
 			void callback();
 		}
 	}
+	free(func->args);
+	free(func);
 }
 
 void lua_new_msg (struct tgl_message *M)
 {
-	if (!socket_answer_start())
-	{
-		postpone(callback_new_message, M);
-	} else {
-		callback_new_message(M);
-	}
-}
-void callback_new_message(void *param){
-	struct tgl_message *M = (struct tgl_message *)param;
 	printf("Sending Message...\n");
 	push("{\"event\": \"message\", ");
 	push_message (M);
@@ -195,6 +197,27 @@ void callback_new_message(void *param){
 //actually is not external/lua call, but the defined callback.
 void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, char *file_name) {
 	assert (TLSR == TLS);
+	union function_args *arg = malloc(sizeof(union function_args));
+	arg->file_download.TLSR = TLSR;
+	arg->file_download.cb_extra = cb_extra;
+	arg->file_download.success = success;
+	arg->file_download.file_name = file_name;
+	if (socket_answer_start()){
+		lua_file_callbackback(arg);
+		free(arg);
+	}
+	else {
+		struct function *new = malloc(sizeof(struct function));
+		new->callback = lua_file_callbackback;
+		new->type = FILE_DOWNLOAD;
+		new->args = arg;
+		new->next = NULL;
+		postpone(new);
+	}
+}
+void lua_file_callbackback(union function_args *arg) {
+	char *file_name = arg->file_download.file_name;
+	int success = arg->file_download.success;
 	if (success) {
 		push("{\"event\":\"download\", \"file\":\"%s\"}", file_name); //TODO: msg number.
 	} else {
@@ -258,11 +281,20 @@ void socket_connect() {
 	}
 }
 int socket_answer_start() {
+	rk_sema_wait(edit_socket_status);
+	if(socked_in_use) {
+		rk_sema_post(edit_socket_status);
+		return 0;
+	}
 	answer_pos = 0;
+	socked_in_use = 1;
+	rk_sema_post(edit_socket_status);
 	return 1;
 }
 void socket_answer_end() {
-
+	rk_sema_wait(edit_socket_status);
+	socked_in_use = 0;
+	rk_sema_post(edit_socket_status);
 }
 void socket_send()
 {
