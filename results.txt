@@ -1,0 +1,68 @@
+
+- event:
+	"download"
+	    - file: The path [string] or [null], if download failed.
+	"message"
+        - flags: [int] yeah, no idea.
+        - forward: [peer] from who the message originally is, or [null] if not forwarded.
+    - sender: [peer] who send it.
+    - receiver: [peer] who can read it now. (should be either a group or the bot)
+    - own: [bool] if the bot's account send it.
+    - unread: [bool] if the message is marked as read.
+    - date: [int]
+    - service: [bool] always false...
+    * text: [string]
+    * media: [media]
+
+- id: unique message number [number]
+
+[media]
+    - type:
+        "geo"
+            - longitude: [int] (6 digits after the decimal)
+            - latitude": [int] (same formalt as longitude)
+            - google: [string] Link to google maps, format "https://maps.google.com/?q=12.123456,12.123456"
+        "document"
+            - encrypted: [bool]
+            - document: [string] Type of the document
+                "image"
+                "audio"
+                "video"
+                "sticker"
+                "document" (everything else)
+            * caption: original file name as [string]   | if value present
+            * mime: [string] MIME-type, eg. "image/png" | if value present
+            * dimension: [size] pixel width and height  | if value present
+            * duration: [int] in seconds                | if value present
+            - size: human readable [string] e.g. "1MiB
+            - bytes: [int] of the bytes e.g. 1243380
+        "contact"
+            - phone: [string] often starting with "+" sign! (the formatting depends on the sending client, the allowed characters are digits, the plus sign, "*","#" (so you can actually send "+++++" as number))
+            - first_name: [string]
+            - last_name: [string]
+            - user_id: [int] telegram user id, or 0 if not a telegram user.
+        "unsupported": well...
+        "???": It is not even unsupported. Thats serious shit!
+
+[fwd]
+    - sender: [peer] who it is from
+    - date: [int] when it was originaly send.
+
+[peer]
+    - id [int] user/group id
+    - type: [string]
+        "user"
+        "group"
+        "encr_chat"
+    - cmd: [string]: use this to send a message to the peer. Will be e.g. "user#1234"
+    - print_name: The name of the user, as it should be displayed. [string] or [null] if not cached yet.
+    * first_name: [string]                    | only if cached.
+    * last_name: [string]                     | only if cached.
+    * real_first_name: [string]               | only if cached.
+    * real_last_name: [string]                | only if cached.
+    * phone: [string] without the leading "+" | only if cached.
+    * access_hash: [int] always 1             | only if cached.
+    - flags [int]: something?
+[size]
+    - width: [int] mostly used for px
+    - height:[int] mostly used for px

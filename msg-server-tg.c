@@ -20,6 +20,11 @@ Compile on my Mac system: (else just copy this code into lua-tg.c and use make a
 gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/usr/include   -DHAVE_CONFIG_H -Wall -Wextra -Werror -Wno-deprecated-declarations -fno-strict-aliasing -fno-omit-frame-pointer -ggdb -Wno-unused-parameter -fPIC -c -MP -MD -MF dep/lua-tg.d -MQ objs/lua-tg.o -o objs/lua-tg.o msg-server-tg.c
 make
 bin/telegram-cli -s 127.0.0.1:4458
+
+
+
+
+echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/usr/include   -DHAVE_CONFIG_H -Wall -Wextra -Werror -Wno-deprecated-declarations -fno-strict-aliasing -fno-omit-frame-pointer -ggdb -Wno-unused-parameter -fPIC -c -MP -MD -MF dep/lua-tg.d -MQ objs/lua-tg.o -o objs/lua-tg.o msg-server-tg.c && make && cp bin/telegram-cli /Users/tasso/Library/Caches/clion10/cmake/generated/3b825333/3b825333/Debug1/tg
 */
 
 #ifdef HAVE_CONFIG_H
@@ -178,6 +183,7 @@ void postpone_execute_next() {
 
 void lua_new_msg (struct tgl_message *M)
 {
+	assert(M);
 	answer_start();
 	printf("Sending Message...\n");
 	push("{\"event\": \"message\", ");
@@ -194,17 +200,21 @@ void lua_file_callbackback(union function_args *arg);
 
 //actually is not external/lua call, but the defined callback.
 void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, char *file_name) {
-	assert (TLSR == TLS);
 	union function_args *arg = malloc(sizeof(union function_args));
 	arg->file_download.success = success;
 	arg->file_download.cb_extra = cb_extra;
-	char *file_name_persistent = malloc(strlen(file_name));
-	memcpy(file_name_persistent, file_name, strlen(file_name));
-	arg->file_download.file_name = file_name_persistent;
-	if (answer_started()){
+	if(file_name) {
+		printf("downloadfile (1): %s", file_name);
+		char *file_name_persistent = malloc(strlen(file_name));
+		memcpy(file_name_persistent, file_name, strlen(file_name));
+		printf("downloadfile (2): %s", file_name_persistent);
+		arg->file_download.file_name = file_name_persistent;
+	} else { //is NULL
+		arg->file_download.file_name = NULL;
+	}
+	if (!answer_started()){
 		lua_file_callbackback(arg);
 		free(arg);
-		answer_end();
 	}
 	else {
 		struct function *new = malloc(sizeof(struct function));
@@ -215,6 +225,7 @@ void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, cha
 	}
 }
 void lua_file_callbackback(union function_args *arg) {
+	printf("downloadfile (3): %s", arg->file_download.file_name);
 	if (answer_started()){
 		struct function *new = malloc(sizeof(struct function));
 		new->callback = lua_file_callbackback;
@@ -227,6 +238,7 @@ void lua_file_callbackback(union function_args *arg) {
 	}
 	answer_start();
 	char *file_name = arg->file_download.file_name;
+	printf("downloadfile (4): %s", file_name);
 	long long int *msg_id = arg->file_download.cb_extra;
 	int success = arg->file_download.success;
 	if (success) {
@@ -239,6 +251,7 @@ void lua_file_callbackback(union function_args *arg) {
 	socket_connect();
 	socket_send();
 	socket_close();
+	answer_end();
 }
 
 
@@ -302,6 +315,7 @@ int answer_start() {
 		rk_sema_post(edit_socket_status);
 		return 0;
 	}
+	assert(socked_in_use == 0);
 	answer_pos = 0;
 	socked_in_use = 1;
 	rk_sema_post(edit_socket_status);
@@ -309,6 +323,7 @@ int answer_start() {
 }
 void answer_end() {
 	rk_sema_wait(edit_socket_status);
+	assert(socked_in_use == 1);
 	socked_in_use = 0;
 	rk_sema_post(edit_socket_status);
 }
@@ -443,32 +458,30 @@ void push_peer (tgl_peer_id_t id, tgl_peer_t *P) {
 	push("{");
 	push("\"id\":%i, \"type\":\"%s\", \"cmd\": \"", tgl_get_peer_id (id), format_peer_type (tgl_get_peer_type (id)));
 	push_peer_cmd(id);
-	push("\", print_name\": \"");
+	push("\", \"print_name\": ");
 	//Note: opend quote for print_name's value!
-	if (!P || !(P->flags & FLAG_CREATED)) {
-		push_peer_cmd(id);
-		push("\"}");
-		return;
-
-	}
 
 	//P is defined -> did not return.
-
-	push("%s\", ", P->print_name);
-
-	switch (tgl_get_peer_type(id))
+	if (P && (P->flags & FLAG_CREATED))
 	{
-		case TGL_PEER_USER:
-			push_user(P);
-			break;
-		case TGL_PEER_CHAT:
-			push_chat(P);
-			break;
-		case TGL_PEER_ENCR_CHAT:
-			push_encr_chat(P);
-			break;
-		default:
-			assert(0);
+		push("\"%s\", ", P->print_name);
+
+		switch (tgl_get_peer_type(id))
+		{
+			case TGL_PEER_USER:
+				push_user(P);
+				break;
+			case TGL_PEER_CHAT:
+				push_chat(P);
+				break;
+			case TGL_PEER_ENCR_CHAT:
+				push_encr_chat(P);
+				break;
+			default:
+				assert(0);
+		}
+	}else{
+		push("null");
 	}
 
 	push(", \"flags\": %i}",  P->flags);
@@ -555,7 +568,6 @@ void push_media(struct tgl_message_media *M, long long int *msg_id)
 			msg_id_copy = malloc(sizeof(*msg_id));
 			memcpy(msg_id_copy, msg_id, sizeof(*msg_id));
 			tgl_do_load_document (TLS, &M->document, lua_file_callback, msg_id_copy); // will download & insert file name.
-			//TODO: wait until the callback pushed the filename.
 			if (M->document.caption && strlen (M->document.caption)) {
 				char *escaped_caption = expand_escapes_alloc(M->document.caption);
 				push(", \"caption\":\"%s\"", escaped_caption);
@@ -633,7 +645,9 @@ void push_media(struct tgl_message_media *M, long long int *msg_id)
 }
 
 void push_message (struct tgl_message *M) {
-	if (!(M->flags & FLAG_CREATED)) { return; }
+	if (!(M->flags & FLAG_CREATED)) {
+		return;
+	}
 	push("\"id\":%lld, \"flags\": %i, \"forward\":", M->id, M->flags);
 	if (tgl_get_peer_type (M->fwd_from_id)) {
 		push("{\"sender\": ");
@@ -655,9 +669,7 @@ void push_message (struct tgl_message *M) {
 		}
 		if (M->media.type && M->media.type != tgl_message_media_none) {
 			push(", \"media\":");
-			printf("1-predownload\n");
 			push_media(&M->media, &M->id);
-			printf("1-postdownload\n");
 		}
 	}
 	// is no dict => no "}".
