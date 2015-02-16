@@ -87,11 +87,10 @@ JSON Reference:
     - cmd: [string]: use this to send a message to the peer. Will be e.g. "user#1234"
     - print_name: The name of the user, as it should be displayed. [string] or [null] if not cached yet.
     * first_name: [string]                    | only if cached.
-    * last_name: [string]                     | only if cached.
-    * real_first_name: [string]               | only if cached.
+    * last_name: [string]                     | only if cached.  ( try dialog_list
+    * real_first_name: [string]               | only if cached.    or -W parameter )
     * real_last_name: [string]                | only if cached.
     * phone: [string] without the leading "+" | only if cached.
-    * access_hash: [int] always 1             | only if cached.
     - flags [int]: something?
 
 [size]
