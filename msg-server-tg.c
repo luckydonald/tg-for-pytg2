@@ -416,7 +416,7 @@ char *format_string_or_null(char *str) {
 	}
 }
 
-void push_peer (tgl_peer_id_t id, tgl_peer_t *P);
+void push_peer (tgl_peer_id_t id);
 void push_peer_cmd(tgl_peer_id_t id);
 
 void push_user (tgl_peer_t *P) {
