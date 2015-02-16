@@ -1,3 +1,28 @@
+JSON Reference:
+
+This is represents the dependency structure, NOT the json nesting!
+Short example to understand:
+
+- foo:
+    "nope"
+    "bar"
+        - baz
+- hurr
+
+If there is an key foo with value "bar", there will be another key bar.
+{"foo":"bar", "baz":2, "hurr":3}
+{"foo":"nope", "hurr":3}
+
+If something is not always present, it is marked with an "*" and a condition is given after a "|":
+    - foo
+    * bar: [int] some random value | only sundays.
+Lets begin:
+
+
+
+
+JSON Reference:
+===============
 
 - event:
 	"download"
@@ -5,23 +30,24 @@
 	"message"
         - flags: [int] yeah, no idea.
         - forward: [peer] from who the message originally is, or [null] if not forwarded.
-    - sender: [peer] who send it.
-    - receiver: [peer] who can read it now. (should be either a group or the bot)
-    - own: [bool] if the bot's account send it.
-    - unread: [bool] if the message is marked as read.
-    - date: [int]
-    - service: [bool] always false...
-    * text: [string]
-    * media: [media]
-
+        - sender: [peer] who send it.
+        - receiver: [peer] who can read it now. (should be either a group or the bot)
+        - peer: [peer] or [null] where you want to reply to, either the group chat if it was in a group chat, else the user's chat (will be equal to either 'sender' or 'receiver'). should be [null] if the bot sent this message.
+        - own: [bool] if the bot's account send it.
+        - unread: [bool] if the message is marked as read.
+        - date: [int]
+        - service: [bool] If it is a normal message (false) or stuff like username changes etc..
+            true:
+                * text: [string] | either text or media
+                * media: [media] | either text or media
 - id: unique message number [number]
+
 
 [media]
     - type:
-        "geo"
-            - longitude: [int] (6 digits after the decimal)
-            - latitude": [int] (same formalt as longitude)
-            - google: [string] Link to google maps, format "https://maps.google.com/?q=12.123456,12.123456"
+        "photo"
+            - encrypted: [bool]
+            * caption: original file name | if present on non encrypted photo
         "document"
             - encrypted: [bool]
             - document: [string] Type of the document
@@ -41,6 +67,10 @@
             - first_name: [string]
             - last_name: [string]
             - user_id: [int] telegram user id, or 0 if not a telegram user.
+        "geo"
+            - longitude: [int] (6 digits after the decimal)
+            - latitude": [int] (same formalt as longitude)
+            - google: [string] Link to google maps, format "https://maps.google.com/?q=12.123456,12.123456"
         "unsupported": well...
         "???": It is not even unsupported. Thats serious shit!
 
@@ -63,6 +93,7 @@
     * phone: [string] without the leading "+" | only if cached.
     * access_hash: [int] always 1             | only if cached.
     - flags [int]: something?
+
 [size]
     - width: [int] mostly used for px
     - height:[int] mostly used for px

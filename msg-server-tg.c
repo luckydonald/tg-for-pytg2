@@ -59,6 +59,7 @@ echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/u
 #include <assert.h>
 
 #include <sys/errno.h>
+#include <Python/Python.h>
 
 
 
@@ -74,7 +75,6 @@ static char socket_answer[SOCKET_ANSWER_MAX_SIZE + 1];
 static int answer_pos = -1;
 
 int msg_freshness = -1; // -1: old (binlog), 0: startup (diff), 1: New
-
 extern struct tgl_state *TLS;
 
 
@@ -101,11 +101,12 @@ void lua_new_msg (struct tgl_message *M);
 void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, char *file_name);
 
 char* expand_escapes_alloc(const char* src);
+char* malloc_formated(char const *format, ...);
 
 void push_message (struct tgl_message *M);
-static void answer_add_printf (const char *format, ...) __attribute__ ((format (printf, 1, 2)));
-#define push(...) \
-  answer_add_printf (__VA_ARGS__)
+static void push (const char *format, ...) __attribute__ ((format (printf, 1, 2)));
+//#define push(...) \
+//  answer_add_printf (__VA_ARGS__)
 
 void lua_init (const char *address_string) {
 	char *address_string_copy = malloc(sizeof(char) * strnlen(address_string,23));
@@ -204,10 +205,7 @@ void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, cha
 	arg->file_download.success = success;
 	arg->file_download.cb_extra = cb_extra;
 	if(file_name) {
-		printf("downloadfile (1): %s", file_name);
-		char *file_name_persistent = malloc(strlen(file_name));
-		memcpy(file_name_persistent, file_name, strlen(file_name));
-		printf("downloadfile (2): %s", file_name_persistent);
+		char *file_name_persistent = malloc_formated("%s",file_name); // + null-terminator
 		arg->file_download.file_name = file_name_persistent;
 	} else { //is NULL
 		arg->file_download.file_name = NULL;
@@ -225,7 +223,6 @@ void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, cha
 	}
 }
 void lua_file_callbackback(union function_args *arg) {
-	printf("downloadfile (3): %s", arg->file_download.file_name);
 	if (answer_started()){
 		struct function *new = malloc(sizeof(struct function));
 		new->callback = lua_file_callbackback;
@@ -238,7 +235,6 @@ void lua_file_callbackback(union function_args *arg) {
 	}
 	answer_start();
 	char *file_name = arg->file_download.file_name;
-	printf("downloadfile (4): %s", file_name);
 	long long int *msg_id = arg->file_download.cb_extra;
 	int success = arg->file_download.success;
 	if (success) {
@@ -379,13 +375,13 @@ void socket_close()
 	}
 }
 
-void answer_add_printf (const char *format, ...) {
+void push (const char *format, ...) {
 	if (answer_pos < 0) { return; }
 	va_list ap;
 	va_start (ap, format);
 	answer_pos += vsnprintf (socket_answer + answer_pos, SOCKET_ANSWER_MAX_SIZE - answer_pos, format, ap);
 	va_end (ap);
-	if (answer_pos > SOCKET_ANSWER_MAX_SIZE) { answer_pos = -1; }
+	if (answer_pos >= SOCKET_ANSWER_MAX_SIZE) { answer_pos = -1; }
 }
 
 
@@ -439,7 +435,7 @@ void push_chat (tgl_peer_t *P) {
 				push(", ");
 			}
 			tgl_peer_id_t id = TGL_MK_USER (P->chat.user_list[i].user_id);
-			push_peer (id, tgl_peer_get (TLS, id));
+			push_peer (id);
 
 		}
 		push("]");
@@ -448,10 +444,10 @@ void push_chat (tgl_peer_t *P) {
 
 void push_encr_chat (tgl_peer_t *P) {
 	push ("\"user\": ");
-	push_peer (TGL_MK_USER (P->encr_chat.user_id), tgl_peer_get (TLS, TGL_MK_USER (P->encr_chat.user_id)));
+	push_peer (TGL_MK_USER (P->encr_chat.user_id));
 }
 
-void push_peer (tgl_peer_id_t id, tgl_peer_t *P) {
+void push_peer (tgl_peer_id_t id) {
 	/*
 	Will be { id: int, type: string, cmd: string }
 	 */
@@ -461,21 +457,22 @@ void push_peer (tgl_peer_id_t id, tgl_peer_t *P) {
 	push("\", \"print_name\": ");
 	//Note: opend quote for print_name's value!
 
+	tgl_peer_t *P = tgl_peer_get(TLS, id);
 	//P is defined -> did not return.
 	if (P && (P->flags & FLAG_CREATED))
 	{
-		push("\"%s\", ", P->print_name);
+		push("\"%s\", ", tgl_peer_get(TLS, id)->print_name);
 
 		switch (tgl_get_peer_type(id))
 		{
 			case TGL_PEER_USER:
-				push_user(P);
+				push_user(tgl_peer_get(TLS, id));
 				break;
 			case TGL_PEER_CHAT:
-				push_chat(P);
+				push_chat(tgl_peer_get(TLS, id));
 				break;
 			case TGL_PEER_ENCR_CHAT:
-				push_encr_chat(P);
+				push_encr_chat(tgl_peer_get(TLS, id));
 				break;
 			default:
 				assert(0);
@@ -483,7 +480,6 @@ void push_peer (tgl_peer_id_t id, tgl_peer_t *P) {
 	}else{
 		push("null");
 	}
-
 	push(", \"flags\": %i}",  P->flags);
 }
 
@@ -651,15 +647,28 @@ void push_message (struct tgl_message *M) {
 	push("\"id\":%lld, \"flags\": %i, \"forward\":", M->id, M->flags);
 	if (tgl_get_peer_type (M->fwd_from_id)) {
 		push("{\"sender\": ");
-		push_peer (M->fwd_from_id, tgl_peer_get (TLS, M->fwd_from_id));
+		push_peer (M->fwd_from_id);
 		push(", \"date\": %i}", M->fwd_date);
 	} else {
 		push("null");
 	}
 	push(", \"sender\":");
-	push_peer (M->from_id, tgl_peer_get (TLS, M->from_id));
+	push_peer (M->from_id);
 	push(", \"receiver\":");
-	push_peer (M->to_id, tgl_peer_get (TLS, M->to_id));
+	push_peer (M->to_id);
+	if(!M->out && (tgl_get_peer_type(M->to_id) == TGL_PEER_CHAT || tgl_get_peer_type(M->to_id) == TGL_PEER_GEO_CHAT))
+	{
+		assert(tgl_get_peer_id(M->from_id) != TLS->our_id  && "Message should not be from ourself!");
+		push(", \"peer\":");
+		push_peer (M->to_id);
+	} else if (!M->out && (tgl_get_peer_type(M->to_id) == TGL_PEER_USER || tgl_get_peer_type(M->to_id) == TGL_PEER_ENCR_CHAT)){
+		assert(tgl_get_peer_id(M->to_id) == TLS->our_id && "Message should not be from ourself!");
+		push(", \"peer\":");
+		push_peer (M->from_id);
+	} else {
+		// own message (or something missed)
+		push(", \"peer\": null");
+	}
 	push(", \"own\": %s, \"unread\":%s, \"date\":%i, \"service\":%s", format_bool(M->out), format_bool(M->unread), M->date, format_bool(M->service) );
 	if (!M->service) {
 		if (M->message_len > 0 && M->message) {
@@ -671,6 +680,8 @@ void push_message (struct tgl_message *M) {
 			push(", \"media\":");
 			push_media(&M->media, &M->id);
 		}
+	} else {
+		push(", \"action\": %i",M->action.type);
 	}
 	// is no dict => no "}".
 }
@@ -740,42 +751,21 @@ char* expand_escapes_alloc(const char* src)
 	expand_escapes(dest, src);
 	return dest;
 }
-
-/*
-
-void check () {
-	closed = 1;
-	while (1)
-	{
-		if (closed)
-		{
-			//Accepting a socket
-			accepted_socket = accept_connection(accept_socket);
-
-			//check if socket is valid
-			if (accepted_socket <= 0)
-			{
-				printf("\t Error: Socket not valid, aborting\n");
-				goto clean_up;
-			}
-			// print out a small message to indicate that a connection has been established
-			printf("\tNew connection accepted\n");
-			//marking connection as open
-			closed = 0;
-		}
-		else
-		{
-			closed = handle_connection(accepted_socket);
-			//if connection has been closed, print out a small message
-			if (closed)
-			{
-				printf("\tConnection has been closed -> Waiting for new connections\n");
-			}
-		}
-	}
+// format (like printf) to a newly malloc'ed string.
+char* malloc_formated(char const *format, ...) {
+	va_list arglist, arglist_copy;
+	va_start( arglist, format);
+	size_t needed = vsnprintf(NULL, 0, format, arglist) + 1; //plus 1 for terminating NULL
+	va_end(arglist);
+	char  *buffer = malloc(needed);
+	va_start( arglist_copy, format);
+	vsnprintf(buffer, needed, format, arglist_copy);
+	va_end( arglist );
+	*(buffer + needed - 1) = '\0'; // ensure nul terminator
+	return buffer;
 }
 
-*/
+
 
 // Empty stuff:
 void lua_secret_chat_update (struct tgl_secret_chat *C, unsigned flags) {
