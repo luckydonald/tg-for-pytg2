@@ -72,7 +72,7 @@ JSON Reference:
             - latitude": [int] (same formalt as longitude)
             - google: [string] Link to google maps, format "https://maps.google.com/?q=12.123456,12.123456"
         "unsupported": well...
-        "???": It is not even unsupported. Thats serious shit!
+        "???": It is not even unsupported. That's serious shit!
 
 [fwd]
     - sender: [peer] who it is from

@@ -187,7 +187,7 @@ void lua_new_msg (struct tgl_message *M)
 	assert(M);
 	answer_start();
 	printf("Sending Message...\n");
-	push("{\"event\": \"message\", ");
+	push("{\"event\": \"message\"");
 	push_message (M);
 	push("}");
 	socket_connect();
@@ -644,7 +644,7 @@ void push_message (struct tgl_message *M) {
 	if (!(M->flags & FLAG_CREATED)) {
 		return;
 	}
-	push("\"id\":%lld, \"flags\": %i, \"forward\":", M->id, M->flags);
+	push(", \"id\":%lld, \"flags\": %i, \"forward\":", M->id, M->flags);
 	if (tgl_get_peer_type (M->fwd_from_id)) {
 		push("{\"sender\": ");
 		push_peer (M->fwd_from_id);
@@ -662,7 +662,7 @@ void push_message (struct tgl_message *M) {
 		push(", \"peer\":");
 		push_peer (M->to_id);
 	} else if (!M->out && (tgl_get_peer_type(M->to_id) == TGL_PEER_USER || tgl_get_peer_type(M->to_id) == TGL_PEER_ENCR_CHAT)){
-		assert(tgl_get_peer_id(M->to_id) == TLS->our_id && "Message should not be from ourself!");
+		// assert(tgl_get_peer_id(M->to_id) != TLS->our_id && "Message should not be from ourself!");
 		push(", \"peer\":");
 		push_peer (M->from_id);
 	} else {
@@ -673,11 +673,11 @@ void push_message (struct tgl_message *M) {
 	if (!M->service) {
 		if (M->message_len > 0 && M->message) {
 			char *escaped_message = expand_escapes_alloc(M->message);
-			push(", \"text\": \"%s\"", escaped_message); // http://stackoverflow.com/a/3767300
+			push(", \"text\": \"%s\", \"media\": null", escaped_message); // http://stackoverflow.com/a/3767300
 			free(escaped_message);
 		}
 		if (M->media.type && M->media.type != tgl_message_media_none) {
-			push(", \"media\":");
+			push(", \"text\": null, \"media\":");
 			push_media(&M->media, &M->id);
 		}
 	} else {
