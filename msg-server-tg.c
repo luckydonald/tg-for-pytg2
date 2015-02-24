@@ -27,7 +27,7 @@ One-liner:
 echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/usr/include   -DHAVE_CONFIG_H -Wall -Wextra -Werror -Wno-deprecated-declarations -fno-strict-aliasing -fno-omit-frame-pointer -ggdb -Wno-unused-parameter -fPIC -c -MP -MD -MF dep/lua-tg.d -MQ objs/lua-tg.o -o objs/lua-tg.o msg-server-tg.c && make && cp bin/telegram-cli /Users/tasso/Library/Caches/clion10/cmake/generated/3b825333/3b825333/Debug1/tg
 */
 
-#define PYTG2_CLI_VERSION "0.0.a"
+#define PYTG2_CLI_VERSION "tg.0.1"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -125,9 +125,9 @@ void print_no_address() {
 void lua_init (const char *address_string) {
 	printf(COLOR_GREEN "\n"
 			"==========================\n"
-			"Started  PYTG 2  plugin.\n"
-			"CLI Plugin Version " PYTG2_CLI_VERSION "\n"
-			"==========================\n" COLOR_NORMAL);
+			" | Started PYTG2 plugin |\n"
+			" | Version %12s |\n"
+			"==========================\n\n" COLOR_NORMAL, PYTG2_CLI_VERSION);
 	if (!address_string) {
 		return print_no_address();
 	}
@@ -230,11 +230,15 @@ void push_fressness()
 	switch (msg_freshness) {
 			case FRESHNESS_OLD:
 				push("old\"");
-			case FRESHNESS_STARTUP:
+			break;
+		case FRESHNESS_STARTUP:
 				push("startup\"");
-			case FRESHNESS_NEW:
+			break;
+		case FRESHNESS_NEW:
 				push("new\"");
+				break;
 			default:
+				printf("PYTG2: ERROR: Freshness (%i) is off the charts!", msg_freshness);
 				assert (0 && "Hit default of freshness!");
 		}
 	push("\"");
