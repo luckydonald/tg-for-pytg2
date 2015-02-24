@@ -23,9 +23,11 @@ bin/telegram-cli -s 127.0.0.1:4458
 
 
 
-
+One-liner:
 echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/usr/include   -DHAVE_CONFIG_H -Wall -Wextra -Werror -Wno-deprecated-declarations -fno-strict-aliasing -fno-omit-frame-pointer -ggdb -Wno-unused-parameter -fPIC -c -MP -MD -MF dep/lua-tg.d -MQ objs/lua-tg.o -o objs/lua-tg.o msg-server-tg.c && make && cp bin/telegram-cli /Users/tasso/Library/Caches/clion10/cmake/generated/3b825333/3b825333/Debug1/tg
 */
+
+#define PYTG2_CLI_VERSION "0.0.a"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -73,8 +75,14 @@ echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/u
 #define BLOCK_SIZE 256
 static char socket_answer[SOCKET_ANSWER_MAX_SIZE + 1];
 static int answer_pos = -1;
+static int have_address = 0;
 
-int msg_freshness = -1; // -1: old (binlog), 0: startup (diff), 1: New
+#define FRESHNESS_OLD -1
+#define FRESHNESS_STARTUP 0
+#define FRESHNESS_NEW 1
+
+int msg_freshness = FRESHNESS_OLD; // -1: old (binlog), 0: startup (diff), 1: New
+
 extern struct tgl_state *TLS;
 
 
@@ -107,8 +115,23 @@ void push_message (struct tgl_message *M);
 static void push (const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 //#define push(...) \
 //  answer_add_printf (__VA_ARGS__)
+void print_no_address() {
+	printf(COLOR_YELLOW
+			"PYTG2: " COLOR_REDB "No given address to bind.\n" COLOR_RED
+			"Use `-s IP[:Port]`.\n" COLOR_NORMAL);
+	return;
+}
 
 void lua_init (const char *address_string) {
+	printf(COLOR_GREEN "\n"
+			"==========================\n"
+			"Started  PYTG 2  plugin.\n"
+			"CLI Plugin Version " PYTG2_CLI_VERSION "\n"
+			"==========================\n" COLOR_NORMAL);
+	if (!address_string) {
+		return print_no_address();
+	}
+	have_address = 1;
 	char *address_string_copy = malloc(sizeof(char) * strnlen(address_string,23));
 	strcpy(address_string_copy, address_string);
 	socket_init(address_string_copy);
@@ -182,18 +205,39 @@ void postpone_execute_next() {
 	free(func);
 }
 
+void push_fressness();
+
 void lua_new_msg (struct tgl_message *M)
 {
+	if (!have_address) { return print_no_address(); }
 	assert(M);
 	answer_start();
-	printf("Sending Message...\n");
-	push("{\"event\": \"message\"");
+	printf("Generating Message...\n");
+	push("{\"event\":\"message\", ");
+	push_fressness();
+	push(",");
 	push_message (M);
 	push("}");
 	socket_connect();
 	socket_send();
 	socket_close();
 	answer_end();
+}
+
+void push_fressness()
+{
+	push("\"freshness\":\"");
+	switch (msg_freshness) {
+			case FRESHNESS_OLD:
+				push("old\"");
+			case FRESHNESS_STARTUP:
+				push("startup\"");
+			case FRESHNESS_NEW:
+				push("new\"");
+			default:
+				assert (0 && "Hit default of freshness!");
+		}
+	push("\"");
 }
 
 
@@ -269,7 +313,11 @@ void socket_init (char *address_string)
 	}
 	else
 	{
+		errno = 0;
 		port = atoi(port_pos);
+		if (errno != 0) {
+			DIE("port number");
+		}
 		printf("Address: \"%s\", IP: %i.\n", address_string, port);
 	}
 	memset((void *) &serv_addr, 0, sizeof(struct sockaddr_in));
@@ -769,30 +817,38 @@ char* malloc_formated(char const *format, ...) {
 
 // Empty stuff:
 void lua_secret_chat_update (struct tgl_secret_chat *C, unsigned flags) {
+	if (!have_address) { return; }
 	return;
 }
 void lua_user_update (struct tgl_user *U, unsigned flags) {
+	if (!have_address) { return; }
 	printf("User Update (#%i \"%s\").\n", U->id.id, U->first_name);
 	return;
 }
 void lua_diff_end (void) {
 	/* Did all message since last session. */
-	msg_freshness = 1;
+	if (!have_address) { return print_no_address(); }
+	msg_freshness = FRESHNESS_NEW;
 	return;
 }
 void lua_do_all (void) {
+	if (!have_address) { return; }
 	postpone_execute_next();
 	return;
 }
 void lua_our_id (int id) {
+	if (!have_address) { return print_no_address(); }
 	printf("lua_our_id: %i\n", id);
 	return;
 }
 void lua_binlog_end (void) {
 	/* Did all old messages.
 	next comes new message (since last session -> lua_diff_end) */
+	if (!have_address) { return; }
+	msg_freshness = FRESHNESS_STARTUP;
 	return;
 }
 void lua_chat_update (struct tgl_chat *C, unsigned flags) {
+	if (!have_address) { return; }
 	return;
 }

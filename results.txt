@@ -23,11 +23,16 @@ Lets begin:
 
 JSON Reference:
 ===============
-
 - event:
 	"download"
+        - id: unique message number [number]
 	    - file: The path [string] or [null], if download failed.
 	"message"
+        - id: unique message number [number]
+	    - freshness: [string] Shows how fresh a message is: (You probably only want to process +1 (and maybe 0)
+	        "old"     (binlog, already processed once some sessions ago. Is loaded from disk),
+	        "startup" (diff, what is not processed, but happened before the startup of this session)
+	        "new"     (That message was received since the CLI is running.)
         - flags: [int] yeah, no idea.
         - forward: [peer] from who the message originally is, or [null] if not forwarded.
         - sender: [peer] who send it.
@@ -40,7 +45,7 @@ JSON Reference:
             true:
                 * text: [string] | either text or media
                 * media: [media] | either text or media
-- id: unique message number [number]
+
 
 
 [media]
