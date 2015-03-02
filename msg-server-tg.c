@@ -116,9 +116,9 @@ static void push (const char *format, ...) __attribute__ ((format (printf, 1, 2)
 //#define push(...) \
 //  answer_add_printf (__VA_ARGS__)
 void print_no_address() {
-	printf(COLOR_YELLOW
-			"PYTG2: " COLOR_REDB "No given address to bind.\n" COLOR_RED
-			"Use `-s IP[:Port]`.\n" COLOR_NORMAL);
+	printf(
+			COLOR_YELLOW "PYTG2: " COLOR_REDB "No given address to bind.\n"
+			COLOR_RED    "Use `-s IP[:Port]`.\n" COLOR_NORMAL);
 	return;
 }
 
@@ -127,7 +127,9 @@ void lua_init (const char *address_string) {
 			"==========================\n"
 			" | Started PYTG2 plugin |\n"
 			" | Version %12s |\n"
-			"==========================\n\n" COLOR_NORMAL, PYTG2_CLI_VERSION);
+			"==========================\n\n" COLOR_NORMAL,
+			PYTG2_CLI_VERSION
+	);
 	if (!address_string) {
 		return print_no_address();
 	}
@@ -696,7 +698,7 @@ void push_message (struct tgl_message *M) {
 	if (!(M->flags & FLAG_CREATED)) {
 		return;
 	}
-	push(", \"id\":%lld, \"flags\": %i, \"forward\":", M->id, M->flags);
+	push("\"id\":%lld, \"flags\": %i, \"forward\":", M->id, M->flags);
 	if (tgl_get_peer_type (M->fwd_from_id)) {
 		push("{\"sender\": ");
 		push_peer (M->fwd_from_id);
