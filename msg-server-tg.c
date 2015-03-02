@@ -19,7 +19,7 @@
 Compile on my Mac system: (else just copy this code into lua-tg.c and use make as usual)
 gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/usr/include   -DHAVE_CONFIG_H -Wall -Wextra -Werror -Wno-deprecated-declarations -fno-strict-aliasing -fno-omit-frame-pointer -ggdb -Wno-unused-parameter -fPIC -c -MP -MD -MF dep/lua-tg.d -MQ objs/lua-tg.o -o objs/lua-tg.o msg-server-tg.c
 make
-bin/telegram-cli -s 127.0.0.1:4458
+bin/telegram-cli -P 1337 -s 127.0.0.1:4458
 
 
 
@@ -207,7 +207,7 @@ void postpone_execute_next() {
 	free(func);
 }
 
-void push_fressness();
+void push_freshness();
 
 void lua_new_msg (struct tgl_message *M)
 {
@@ -216,7 +216,7 @@ void lua_new_msg (struct tgl_message *M)
 	answer_start();
 	printf("Generating Message...\n");
 	push("{\"event\":\"message\", ");
-	push_fressness();
+	push_freshness();
 	push(",");
 	push_message (M);
 	push("}");
@@ -226,7 +226,7 @@ void lua_new_msg (struct tgl_message *M)
 	answer_end();
 }
 
-void push_fressness()
+void push_freshness()
 {
 	push("\"freshness\":\"");
 	switch (msg_freshness) {
@@ -243,7 +243,7 @@ void push_fressness()
 				printf("PYTG2: ERROR: Freshness (%i) is off the charts!", msg_freshness);
 				assert (0 && "Hit default of freshness!");
 		}
-	push("\"");
+	// already closed the quotes.
 }
 
 
