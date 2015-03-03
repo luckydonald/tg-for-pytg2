@@ -113,7 +113,7 @@ char* malloc_formated(char const *format, ...);
 void push_message (struct tgl_message *M);
 static void push (const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 //#define push(...) \
-//  answer_add_printf (__VA_ARGS__)
+  answer_add_printf (__VA_ARGS__)
 void print_no_address() {
 	printf(
 			COLOR_YELLOW "PYTG2: " COLOR_REDB "No given address to bind.\n"
