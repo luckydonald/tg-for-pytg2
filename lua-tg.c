@@ -52,8 +52,8 @@ echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/u
 #include "tgl/tgl.h"
 
 // while debug:
-#include "tgl/tgl.h"
-#include "tgl/generate.h"
+//#include "tgl/tgl.h"
+//#include "tgl/generate.h"
 
 // va_list, va_start, va_arg, va_end
 #include <stdarg.h>
@@ -61,7 +61,6 @@ echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/u
 #include <assert.h>
 
 #include <sys/errno.h>
-#include <Python/Python.h>
 
 
 
@@ -787,10 +786,10 @@ void expand_escapes(char* dest, const char* src)
 				*(dest++) = '\\';
 				*(dest++) = '\"';
 				break;
-			case '\'':
+			/*case '\'':
 				*(dest++) = '\\';
 				*(dest++) = '\'';
-				break;
+				break;*/
 			default:
 				*(dest++) = c;
 		}

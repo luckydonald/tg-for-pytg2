@@ -4,6 +4,8 @@
 /////////////////////
 #ifndef __SEMA_WORKAROUND_H
 #define __SEMA_WORKAROUND_H
+#include <sys/errno.h>
+
 
 #ifdef __APPLE__
 #include <dispatch/dispatch.h>
@@ -32,15 +34,13 @@ rk_sema_init(struct rk_sema *s, uint32_t value)
 #endif
 }
 
-static inline void
-rk_sema_wait(struct rk_sema *s)
+static inline void rk_sema_wait(struct rk_sema *s)
 {
 
 #ifdef __APPLE__
 	dispatch_semaphore_wait(s->sem, DISPATCH_TIME_FOREVER);
 #else
     int r;
-
     do {
             r = sem_wait(&s->sem);
     } while (r == -1 && errno == EINTR);
