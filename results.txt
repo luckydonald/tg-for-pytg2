@@ -23,6 +23,7 @@ Lets begin:
 
 JSON Reference:
 ===============
+* error: [string] if pytg2 failed processing. If error is given, don't expect the other fields to exist!
 - event:
 	"download"
         - id: unique message number [number]
@@ -42,7 +43,7 @@ JSON Reference:
         - unread: [bool] if the message is marked as read.
         - date: [int]
         - service: [bool] If it is a normal message (false) or stuff like username changes etc..
-            true:
+            false:
                 * text: [string] | either text or media
                 * media: [media] | either text or media
 

@@ -112,8 +112,7 @@ char* malloc_formated(char const *format, ...);
 
 void push_message (struct tgl_message *M);
 static void push (const char *format, ...) __attribute__ ((format (printf, 1, 2)));
-//#define push(...)
-//  answer_add_printf (__VA_ARGS__)
+//#define push(...) answer_add_printf (__VA_ARGS__)
 void print_no_address() {
 	printf(
 			COLOR_YELLOW "PYTG2: " COLOR_REDB "No given address to bind.\n"
@@ -216,8 +215,11 @@ void lua_new_msg (struct tgl_message *M)
 	printf("Generating Message...\n");
 	push("{\"event\":\"message\", ");
 	push_freshness();
-	push(",");
-	push_message (M);
+	if (M->flags & FLAG_CREATED)
+	{
+		push(",");
+		push_message (M);
+	}
 	push("}");
 	socket_connect();
 	socket_send();
@@ -514,7 +516,7 @@ void push_peer (tgl_peer_id_t id) {
 	//P is defined -> did not return.
 	if (P && (P->flags & FLAG_CREATED))
 	{
-		push("\"%s\", ", tgl_peer_get(TLS, id)->print_name);
+		push("\"%s\", ", tgl_peer_get(TLS, id)->print_name); //print_name
 
 		switch (tgl_get_peer_type(id))
 		{
@@ -530,10 +532,11 @@ void push_peer (tgl_peer_id_t id) {
 			default:
 				assert(0);
 		}
+		push(", \"flags\": %i",  P->flags);
 	}else{
-		push("null");
+		push("null"); // print_name null, if peer unknown.
 	}
-	push(", \"flags\": %i}",  P->flags);
+	push("}");
 }
 
 void push_peer_cmd(tgl_peer_id_t id) {
