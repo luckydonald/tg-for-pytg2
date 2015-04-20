@@ -29,7 +29,7 @@ echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/u
 //#include "lua_tg_version.h"
 
 #ifndef PYTG2_CLI_VERSION
-#define PYTG2_CLI_VERSION "tg.0.1"
+#define PYTG2_CLI_VERSION "tg.0.2"
 //#define PYTG2_CLI_GIT_COMMIT ""
 //#define PYTG2_CLI_GIT_BRANCH ""
 #endif
