@@ -26,10 +26,13 @@ bin/telegram-cli -P 1337 -s 127.0.0.1:4458
 One-liner:
 echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/usr/include   -DHAVE_CONFIG_H -Wall -Wextra -Werror -Wno-deprecated-declarations -fno-strict-aliasing -fno-omit-frame-pointer -ggdb -Wno-unused-parameter -fPIC -c -MP -MD -MF dep/lua-tg.d -MQ objs/lua-tg.o -o objs/lua-tg.o msg-server-tg.c && make && cp bin/telegram-cli /Users/tasso/Library/Caches/clion10/cmake/generated/3b825333/3b825333/Debug1/tg
 */
+//#include "lua_tg_version.h"
 
+#ifndef PYTG2_CLI_VERSION
 #define PYTG2_CLI_VERSION "tg.0.1"
-#define PYTG2_CLI_GIT_COMMIT "0992659e0eba8f1e812c7475092f52a626df3876"
-#define PYTG2_CLI_GIT_BRANCH ""
+//#define PYTG2_CLI_GIT_COMMIT ""
+//#define PYTG2_CLI_GIT_BRANCH ""
+#endif
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -272,7 +275,7 @@ void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, cha
 		new_function->callback = lua_file_callbackback;
 		new_function->args = arg;
 		new_function->next = NULL;
-		postpone(new);
+		postpone(new_function);
 	}
 }
 void lua_file_callbackback(union function_args *arg) {
@@ -283,7 +286,7 @@ void lua_file_callbackback(union function_args *arg) {
 		memcpy(args, arg, sizeof(union function_args));
 		new_function->args = args;
 		new_function->next = NULL;
-		postpone(new);
+		postpone(new_function);
 		return;
 	}
 	answer_start();
@@ -475,6 +478,10 @@ char *format_string_or_null(char *str) {
 
 void push_peer (tgl_peer_id_t id);
 void push_peer_cmd(tgl_peer_id_t id);
+
+void push_action(struct tgl_message_action *action);
+
+void push_typing(enum tgl_typing_status status);
 
 void push_user (tgl_peer_t *P) {
 	push("\"first_name\":\"%s\", \"last_name\":\"%s\", \"real_first_name\": \"%s\", \"real_last_name\": \"%s\", \"phone\":\"%s\"",
@@ -739,11 +746,130 @@ void push_message (struct tgl_message *M) {
 			push_media(&M->media, &M->id);
 		}
 	} else {
-		push(", \"action\": ",M->action.type, M->action->);
-		push_action(M->action);
+		push(", \"action\": ");
+		push_action(&(M->action));
 	}
 	// is no dict => no "}".
 }
+
+void push_action(struct tgl_message_action *action)
+{
+	push ("{\"type\":%d, \"text\":", action->type);
+	switch (action->type) {
+		case tgl_message_action_none:
+			push("\"none\"");
+			break;
+		case tgl_message_action_geo_chat_create:
+			push ("\"geochat created\"");
+			break;
+		case tgl_message_action_geo_chat_checkin:
+			push ("\"checking in geochat\"");
+			break;
+		case tgl_message_action_chat_create:
+			push ("\"created chat\", \"title\":\"%s\",\"members_num\":%d", action->title, action->user_num);
+			break;
+		case tgl_message_action_chat_edit_title:
+			push ("\"changed chat title\",\"title\":\"%s\"", action->new_title);
+			break;
+		case tgl_message_action_chat_edit_photo:
+			push ("\"changed chat photo\"");
+			break;
+		case tgl_message_action_chat_delete_photo:
+			push ("\"deleted chat photo\"");
+			break;
+		case tgl_message_action_chat_add_user:
+			push ("\"added user to chat\",\"user\":");
+			push_peer (tgl_set_peer_id (TGL_PEER_USER, action->user));
+			push ("\n");
+			break;
+		case tgl_message_action_chat_delete_user:
+			push ("\"deleted user from chat\", \"user\":");
+			push_peer (tgl_set_peer_id (TGL_PEER_USER, action->user));
+			break;
+		case tgl_message_action_set_message_ttl:
+			push ("\"set secure chat timeout\", \"seconds\":%d", action->ttl);
+			break;
+		case tgl_message_action_read_messages:
+			push ("\"marked messages read\",\"count\":%d", action->read_cnt);
+			break;
+		case tgl_message_action_delete_messages:
+			push ("\"messages deleted\",\"count\":%d", action->delete_cnt);
+			break;
+		case tgl_message_action_screenshot_messages:
+			push ("\"messages screenshoted\",\"count\":%d", action->screenshot_cnt);
+			break;
+		case tgl_message_action_flush_history:
+			push ("\"cleared history\"");
+			break;
+		case tgl_message_action_resend:
+			push ("\"resend query\"");
+			break;
+		case tgl_message_action_notify_layer:
+			push ("\"updated layer\",\"layer\":%d", action->layer);
+			break;
+		case tgl_message_action_typing:
+			push ("\"typing\",\"status\":%d,\"text\":\"", action->typing);
+			push_typing (action->typing);
+			push ("\"");
+			break;
+		case tgl_message_action_noop:
+			push ("\"noop\"");
+			break;
+		case tgl_message_action_request_key:
+			push ("\"request rekey\", \"id\":\"%016llx\"", action->exchange_id);
+			break;
+		case tgl_message_action_accept_key:
+			push ("\"accept rekey\", \"id\":\"%016llx\"", action->exchange_id);
+			break;
+		case tgl_message_action_commit_key:
+			push ("\"commit rekey\", \"id\":\"%016llx\"", action->exchange_id);
+			break;
+		case tgl_message_action_abort_key:
+			push ("\"abort rekey\", \"id\":\"%016llx\"", action->exchange_id);
+			break;
+	}
+	push("}");
+}
+
+void push_typing(enum tgl_typing_status status)
+{
+	switch (status) {
+			case tgl_typing_none:
+				push ("doing nothing");
+				break;
+			case tgl_typing_typing:
+				push ("typing");
+				break;
+			case tgl_typing_cancel:
+				push ("deleting typed message");
+				break;
+			case tgl_typing_record_video:
+				push ("recording video");
+				break;
+			case tgl_typing_upload_video:
+				push ("uploading video");
+				break;
+			case tgl_typing_record_audio:
+				push ("recording audio");
+				break;
+			case tgl_typing_upload_audio:
+				push ("uploading audio");
+				break;
+			case tgl_typing_upload_photo:
+				push ("uploading photo");
+				break;
+			case tgl_typing_upload_document:
+				push ("uploading document");
+				break;
+			case tgl_typing_geo:
+				push ("choosing location");
+				break;
+			case tgl_typing_choose_contact:
+				push ("choosing contact");
+				break;
+		}
+}
+
 void push_client_id (struct tgl_message *M)
 {
 	push("client_id: %i",TLS->our_id);

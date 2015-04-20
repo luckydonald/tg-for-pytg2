@@ -46,7 +46,58 @@ JSON Reference:
             false:
                 * text: [string] | either text or media
                 * media: [media] | either text or media
-
+            true:
+                - type: [int]
+                - text: [string] a textual description of the type, see the comment:
+                > type / string:
+                   0 "none"
+                   1 "geochat created"
+                   2 "checking in geochat"
+                   3 "created chat"  a user created a new chat with you in it.
+                      - title: [string] the chat's title
+                      - members_num: [int] the count of initial added users
+                   4 "changed chat title"
+                      - title: [string] the new title
+                   5 "changed chat photo"
+                   6 "added user to chat"
+                      - user: [peer] the new user
+                   7 "deleted user from chat"
+                      - user: [peer] the deleted user
+                   8 "set secure chat timeout"
+                      - seconds [int] the ttl in seconds
+                   9 "marked messages read"
+                      - count: [int] how many messages got marked as read
+                  10 "messages deleted"
+                      - count: [int] how many messages were deleted
+                  11 "messages screenshoted"
+                      - count: [int] probably, how many messages were on the screenshot
+                  12 "cleared history"
+                  13 "resend query"
+                  14 "updated layer"
+                      - layer: [int]
+                  15 "typing"
+                      - status [int]
+                      - text [string]
+                             0 "doing nothing"
+                             1 "typing"
+                             2 "deleting typed message"
+                             3 "recording video"
+                             4 "uploading video"
+                             5 "recording audio"
+                             6 "uploading audio"
+                             7 "uploading photo"
+                             8 "uploading document"
+                             9 "choosing location"
+                            10 "choosing contact"
+                  17 "noop" (I have no idea what that is...)
+                  18 "request rekey"
+                        - id [string] unsigned long long int in hexadecimal notation occupying a minimum of 16 positions, padded with 0
+                     "accept rekey"
+                        - id [string] unsigned long long int in hexadecimal notation occupying a minimum of 16 positions, padded with 0
+                     "commit rekey"
+                        - id [string] unsigned long long int in hexadecimal notation occupying a minimum of 16 positions, padded with 0
+                     "abort rekey"
+                        - id [string] unsigned long long int in hexadecimal notation occupying a minimum of 16 positions, padded with 0
 
 
 [media]
@@ -78,7 +129,7 @@ JSON Reference:
             - latitude": [int] (same formalt as longitude)
             - google: [string] Link to google maps, format "https://maps.google.com/?q=12.123456,12.123456"
         "unsupported": well...
-        "???": It is not even unsupported. That's serious shit!
+        "???": It is not even unsupported. Dealing with serious shit!
 
 [fwd]
     - sender: [peer] who it is from
