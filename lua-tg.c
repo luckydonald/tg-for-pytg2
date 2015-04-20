@@ -28,6 +28,8 @@ echo -e "\n\n\n" && gcc -I. -I. -g -O2  -I/usr/local/include -I/usr/include -I/u
 */
 
 #define PYTG2_CLI_VERSION "tg.0.1"
+#define PYTG2_CLI_GIT_COMMIT "0992659e0eba8f1e812c7475092f52a626df3876"
+#define PYTG2_CLI_GIT_BRANCH ""
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -266,21 +268,21 @@ void lua_file_callback (struct tgl_state *TLSR, void *cb_extra, int success, cha
 		free(arg);
 	}
 	else {
-		struct function *new = malloc(sizeof(struct function));
-		new->callback = lua_file_callbackback;
-		new->args = arg;
-		new->next = NULL;
+		struct function *new_function = malloc(sizeof(struct function));
+		new_function->callback = lua_file_callbackback;
+		new_function->args = arg;
+		new_function->next = NULL;
 		postpone(new);
 	}
 }
 void lua_file_callbackback(union function_args *arg) {
 	if (answer_started()){
-		struct function *new = malloc(sizeof(struct function));
-		new->callback = lua_file_callbackback;
+		struct function *new_function = malloc(sizeof(struct function));
+		new_function->callback = lua_file_callbackback;
 		union function_args *args = malloc(sizeof(union function_args));
 		memcpy(args, arg, sizeof(union function_args));
-		new->args = args;
-		new->next = NULL;
+		new_function->args = args;
+		new_function->next = NULL;
 		postpone(new);
 		return;
 	}
@@ -737,7 +739,8 @@ void push_message (struct tgl_message *M) {
 			push_media(&M->media, &M->id);
 		}
 	} else {
-		push(", \"action\": %i",M->action.type);
+		push(", \"action\": ",M->action.type, M->action->);
+		push_action(M->action);
 	}
 	// is no dict => no "}".
 }
