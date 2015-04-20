@@ -1,0 +1,15 @@
+<project default="git-revision">
+	<target name="git-revision">
+		<exec executable="sh" outputproperty="git-branch">
+			<arg value="-c" />
+			<arg value=" git rev-parse --abbrev-ref HEAD" />
+		</exec>
+		<exec executable="sh" outputproperty="git-commit">
+			<arg value="-c" />
+			<arg value="git rev-parse HEAD" />
+		</exec>
+		<echo>Revision Build Information: ${git-branch}: ${git-commit}</echo>
+		<replaceregexp file="lua-tg.c" match='#define PYTG2_CLI_GIT_COMMIT "(\b[0-9a-f]{5,40}\b)"' replace='#define PYTG2_CLI_GIT_COMMIT "${git-commit}"' />
+		<replaceregexp file="lua-tg.c" match='#define PYTG2_CLI_GIT_BRANCH "((?!.*/\.)(?!.*\.\.)(?!/)(?!.*//)(?!.*@\{)(?!.*\\)[^\040\177 ~^:?*[]+/[^\040\177 ~^:?*[]+(?<!\.lock)(?<!/)(?<!\.))"' replace='#define PYTG2_CLI_GIT_BRANCH "${git-branch}"' />
+	</target>
+</project>
